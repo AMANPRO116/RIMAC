@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rimac Domain ECU / XCU — Control Simulation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #14171b;
+    --bg2: #101317;
+    --panel: #1b2027;
+    --panel-2: #20262f;
+    --line: #2c333d;
+    --text: #e7eaee;
+    --muted: #8a93a3;
+    --muted2: #626b7a;
+    --cyan: #4fc7de;
+    --amber: #e6a13c;
+    --green: #57bd85;
+    --red: #d9705f;
+    --violet: #9089d6;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'Space Grotesk', sans-serif;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #f3f1ec; --bg2: #ece9e2; --panel: #ffffff; --panel-2: #f7f5f0;
+      --line: #ddd8cd; --text: #23252a; --muted: #5c5f66; --muted2: #83868d;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #14171b; --bg2: #101317; --panel: #1b2027; --panel-2: #20262f;
+    --line: #2c333d; --text: #e7eaee; --muted: #8a93a3; --muted2: #626b7a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--sans); }
+  body { -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 40px 24px 80px; }
+
+  header.hero {
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 28px;
+    margin-bottom: 36px;
+    display: flex; flex-wrap: wrap; gap: 24px; justify-content: space-between; align-items: flex-end;
+  }
+  .hero-title { max-width: 620px; }
+  .kicker { font-family: var(--mono); font-size: 12px; color: var(--cyan); letter-spacing: 0.02em; margin-bottom: 10px; }
+  h1 { font-size: 30px; line-height: 1.15; margin: 0 0 10px; font-weight: 600; }
+  .hero-title p { color: var(--muted); font-size: 14.5px; line-height: 1.55; margin: 0; max-width: 54ch; }
+  .hero-stat { text-align: right; font-family: var(--mono); }
+  .hero-stat .num { font-size: 34px; color: var(--cyan); font-weight: 500; }
+  .hero-stat .lbl { font-size: 11.5px; color: var(--muted2); margin-top: 2px; }
+
+  section { margin-bottom: 46px; }
+  .section-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 16px; }
+  .section-head h2 { font-size: 15px; font-weight: 600; margin: 0; text-transform: none; }
+  .section-head .idx { font-family: var(--mono); color: var(--muted2); font-size: 12.5px; }
+  .section-note { color: var(--muted); font-size: 13px; margin: -6px 0 16px; max-width: 68ch; line-height: 1.5; }
+
+  /* spec cards */
+  .spec-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 700px) { .spec-grid { grid-template-columns: 1fr; } }
+  .spec-card { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 18px 20px; }
+  .spec-card.xcu { border-left: 3px solid var(--amber); }
+  .spec-card.domain { border-left: 3px solid var(--cyan); }
+  .spec-card h3 { margin: 0 0 3px; font-size: 16px; }
+  .spec-card .role { color: var(--muted); font-size: 12.5px; margin-bottom: 14px; }
+  .spec-row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 13px; }
+  .spec-row:first-of-type { border-top: none; }
+  .spec-row .k { color: var(--muted); }
+  .spec-row .v { font-family: var(--mono); text-align: right; color: var(--text); }
+
+  .bms-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 14px; }
+  @media (max-width: 700px) { .bms-row { grid-template-columns: 1fr; } }
+  .bms-card { background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 14px 16px; font-size: 12.5px; }
+  .bms-card h4 { margin: 0 0 8px; font-size: 13px; color: var(--text); }
+  .bms-card ul { margin: 0; padding-left: 16px; color: var(--muted); line-height: 1.6; }
+
+  /* motor chart */
+  .chart-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 20px; }
+  .motor-toggle { display: flex; gap: 8px; margin-bottom: 16px; }
+  .motor-toggle button {
+    font-family: var(--mono); font-size: 12px; background: var(--panel-2); color: var(--muted);
+    border: 1px solid var(--line); border-radius: 3px; padding: 7px 12px; cursor: pointer;
+  }
+  .motor-toggle button.active { color: var(--bg); background: var(--cyan); border-color: var(--cyan); }
+  svg#curveChart { width: 100%; height: auto; display: block; }
+  .chart-legend { display: flex; gap: 20px; margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .motor-meta { display: flex; gap: 28px; margin-top: 16px; flex-wrap: wrap; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .motor-meta b { color: var(--text); font-weight: 500; }
+
+  /* timeline */
+  .timeline-strip { display: flex; width: 100%; height: 54px; border-radius: 4px; overflow: hidden; border: 1px solid var(--line); }
+  .tl-seg { height: 100%; cursor: pointer; position: relative; border-right: 1px solid var(--bg); transition: filter 0.15s; }
+  .tl-seg:last-child { border-right: none; }
+  .tl-seg:hover, .tl-seg.selected { filter: brightness(1.25); }
+  .tl-mode-propulsion { background: var(--cyan); }
+  .tl-mode-regen { background: var(--violet); }
+  .tl-mode-fault { background: var(--red); }
+  .tl-mode-degraded { background: var(--amber); }
+  .tl-labels { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10.5px; color: var(--muted2); margin-top: 6px; }
+  .tl-readout {
+    margin-top: 16px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px;
+    padding: 14px 18px; font-family: var(--mono); font-size: 12.5px; display: grid; grid-template-columns: repeat(auto-fit,minmax(120px,1fr)); gap: 10px 20px;
+  }
+  .tl-readout .field .k { color: var(--muted2); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .tl-readout .field .v { color: var(--text); font-size: 14px; margin-top: 2px; }
+  .tl-readout .note { grid-column: 1 / -1; color: var(--amber); border-top: 1px solid var(--line); padding-top: 8px; margin-top: 2px; }
+
+  /* interface log */
+  .log-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+  .log-row { display: grid; grid-template-columns: 60px 100px 1fr; gap: 14px; padding: 10px 16px; font-size: 12.5px; border-top: 1px solid var(--line); align-items: center; }
+  .log-row:first-child { border-top: none; }
+  .log-row:nth-child(odd) { background: var(--panel); }
+  .log-row:nth-child(even) { background: var(--panel-2); }
+  .log-t { font-family: var(--mono); color: var(--muted2); }
+  .log-route { font-family: var(--mono); color: var(--cyan); font-size: 11.5px; }
+  .log-msg { color: var(--text); }
+  .log-msg .tag { color: var(--muted); font-family: var(--mono); font-size: 11px; margin-right: 8px; }
+
+  footer { border-top: 1px solid var(--line); padding-top: 20px; margin-top: 50px; color: var(--muted2); font-size: 11.5px; line-height: 1.6; }
+  a { color: var(--cyan); }
+
+  /* electrical schematic */
+  .elec-panel { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .elec-panel { grid-template-columns: 1fr; } }
+  .elec-schema { background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 16px; }
+  #elecSvg { width: 100%; height: auto; display: block; }
+  .flow { stroke-dasharray: 6 5; }
+  .flow.active-discharge { animation: flowFwd 0.9s linear infinite; }
+  .flow.active-regen { animation: flowRev 0.9s linear infinite; }
+  @keyframes flowFwd { to { stroke-dashoffset: -22; } }
+  @keyframes flowRev { to { stroke-dashoffset: 22; } }
+  .elec-readout { display: flex; flex-direction: column; gap: 10px; }
+  .elec-stat { background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px; }
+  .elec-stat .k { font-family: var(--mono); font-size: 10.5px; color: var(--muted2); text-transform: uppercase; letter-spacing: 0.04em; }
+  .elec-stat .v { font-family: var(--mono); font-size: 18px; margin-top: 3px; }
+  .elec-stat .v.ok { color: var(--green); }
+  .elec-stat .v.warn { color: var(--amber); }
+  .elec-stat .v.fault { color: var(--red); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="hero-title">
+      <div class="kicker">SPECIFICATION-BASED RECONSTRUCTION — NOT RIMAC-VERIFIED DATA</div>
+      <h1>Rimac Domain ECU / XCU<br>control-unit simulation</h1>
+      <p>An interactive model of the control-unit portfolio and a synthetic drive-cycle run, built from Rimac Technology's public ECU case study and product specifications.</p>
+    </div>
+    <div class="hero-stat">
+      <div class="num">8 → 3</div>
+      <div class="lbl">ECUs CONSOLIDATED PER RIMAC CASE STUDY</div>
+    </div>
+  </header>
+
+  <section id="specs">
+    <div class="section-head"><span class="idx">01</span><h2>Control unit portfolio</h2></div>
+    <div class="spec-grid">
+      <div class="spec-card domain">
+        <h3>Domain ECU</h3>
+        <div class="role" id="domainRole"></div>
+        <div id="domainRows"></div>
+      </div>
+      <div class="spec-card xcu">
+        <h3>XCU</h3>
+        <div class="role" id="xcuRole"></div>
+        <div id="xcuRows"></div>
+      </div>
+    </div>
+    <div class="bms-row" id="bmsRow"></div>
+  </section>
+
+  <section id="motors">
+    <div class="section-head"><span class="idx">02</span><h2>Motor torque / power curves</h2></div>
+    <div class="section-note">Reconstructed from the case study's peak-torque, corner-speed and peak-power readings — constant torque to the corner speed, then constant power.</div>
+    <div class="chart-panel">
+      <div class="motor-toggle" id="motorToggle"></div>
+      <svg id="curveChart" viewBox="0 0 640 300"></svg>
+      <div class="chart-legend">
+        <span><i class="swatch" style="background:var(--cyan)"></i>Torque (Nm)</span>
+        <span><i class="swatch" style="background:var(--amber)"></i>Power (kW)</span>
+      </div>
+      <div class="motor-meta" id="motorMeta"></div>
+    </div>
+  </section>
+
+  <section id="sim">
+    <div class="section-head"><span class="idx">03</span><h2>Drive-cycle simulation</h2></div>
+    <div class="section-note" id="simDesc"></div>
+    <div class="timeline-strip" id="tlStrip"></div>
+    <div class="tl-labels"><span>t = 0s</span><span id="tlEndLabel"></span></div>
+    <div class="tl-readout" id="tlReadout"></div>
+  </section>
+
+  <section id="elec">
+    <div class="section-head"><span class="idx">04</span><h2>HV / LV electrical simulation</h2></div>
+    <div class="section-note">A simplified single-string model of the power path implied by the report: battery pack → BMC-owned contactor → busbar → Domain ECU (power distribution) and motor inverter, with the shunt sensor and isolation monitor in line. HV bus voltage is an assumed 800V nominal for illustration — not a value stated in the case study. Values follow the timeline selection above.</div>
+    <div class="elec-panel">
+      <div class="elec-schema"><svg id="elecSvg" viewBox="0 0 560 200"></svg></div>
+      <div class="elec-readout" id="elecReadout"></div>
+    </div>
+  </section>
+
+  <section id="iface">
+    <div class="section-head"><span class="idx">05</span><h2>ECU – BMC interface log</h2></div>
+    <div class="section-note">Illustrates the authority split proposed in the report (S10): the BMC retains control of HV safe-state (contactors, pyro-fuses) independent of the Domain ECU link.</div>
+    <div class="log-list" id="logList"></div>
+  </section>
+
+  <footer>
+    Source: Rimac Technology control unit case study (public, supplier-originated specifications; NXP press release, 12 June 2025). Simulation parameters, efficiency estimates and the drive-cycle scenario are engineering reconstructions for illustration, not measured or Rimac-supplied results.
+  </footer>
+</div>
+
+<script>
+const DATA = {"control_units":{"domain_ecu":{"role":"Backbone of E/E architecture: high compute, extensive I/O, power distribution","processor":{"clusters":2,"cores_per_cluster":4,"core_type":"Arm Cortex-R52","system_manager":"Cortex-M33","total_cores":8,"clock_MHz":800},"memory":{"sdram_GB":2,"nor_flash_MB":128},"io":{"digital_diff_current_inputs":17,"analog_12v_inputs":31,"analog_5v_inputs":4,"digital_outputs":13,"dpo":38},"comm":{"can_fd":7,"lin":4,"ethernet_100base_t1":1,"sent":1},"safety":{"iso26262":"ASIL D","lv124":true,"ece_r10":true},"software":{"autosar_compliant":true,"ai_module_hosting_claimed":true,"accelerator_listed":false},"enclosure":{"ip_rating":"IP67","material":"die-cast or machined aluminum","max_pins":230}},"xcu":{"role":"Lightweight, versatile ECU for rapid deployment","processor":{"cores":2,"core_type":"NXP MPC5744P","clock_MHz":200},"memory":{"ram_KB":385,"flash_KB":2500},"io":{"digital_diff_current_inputs":12,"analog_inputs":8,"digital_outputs":16},"comm":{"can_hs":3,"lin":1,"flexray":2,"broad_r_reach":1},"safety":{"iso26262":"ASIL D","lv124":true,"ece_r10":true},"software":{"base_stack":"flexible, for rapid deployment"},"enclosure":{"material":"magnesium/aluminum die-cast or milled","max_pins":150},"known_limitations":["no CAN-FD","FlexRay adoption declining","little flash/RAM headroom for dual-bank OTA"]}},"bms":{"bmc":{"role":"Single hardware solution to support all projects","processor":{"arch":"32-bit ARM","lockstep_cores_max":6},"memory":{"nvm_MB_max":20,"ram_MB_max":8},"comm":{"can_fd":3,"isospi":2},"key_functions":["10 configurable 5V/12V channels","up to 14 contactor outputs","2 pyro-fuse circuits","2 shunt-based current measurements","fast and normal isolation monitoring","isolated LV and HV parts"],"safety_level_stated":null,"cybersecurity_features_stated":null},"cmc":{"role":"Customizable, proven architecture, fully controlled by BMC","processor":"hardware-based, none listed","comm":{"wireless_optional":true},"key_functions":["cell voltage/temperature monitoring","cell balancing","optional EIS"]},"shunt_sensor":{"role":"Current, isolation, voltage measurement in small form factor","comm":{"isospi_to_bmc":true},"key_functions":["chassis-to-HV isolation resistance","current and voltage measurement"]}},"motors":{"supercar_hypercar":{"peak_torque_Nm":3000,"constant_torque_corner_rpm":1950,"peak_power_kW":640,"peak_power_rpm":2100,"speed_range_rpm":[0,4000],"highest_efficiency_region":{"rpm":[1200,3400],"torque_Nm":[800,2000],"efficiency_pct_approx":[92,100]},"torque_power_curve":[{"speed_rpm":0.0,"torque_Nm":0.0,"power_kW":0.0},{"speed_rpm":166.7,"torque_Nm":256.4,"power_kW":4.5},{"speed_rpm":333.3,"torque_Nm":512.8,"power_kW":17.9},{"speed_rpm":500.0,"torque_Nm":769.2,"power_kW":40.3},{"speed_rpm":666.7,"torque_Nm":1025.6,"power_kW":71.6},{"speed_rpm":833.3,"torque_Nm":1282.1,"power_kW":111.9},{"speed_rpm":1000.0,"torque_Nm":1538.5,"power_kW":161.1},{"speed_rpm":1166.7,"torque_Nm":1794.9,"power_kW":219.3},{"speed_rpm":1333.3,"torque_Nm":2051.3,"power_kW":286.4},{"speed_rpm":1500.0,"torque_Nm":2307.7,"power_kW":362.5},{"speed_rpm":1666.7,"torque_Nm":2564.1,"power_kW":447.5},{"speed_rpm":1833.3,"torque_Nm":2820.5,"power_kW":541.5},{"speed_rpm":2000.0,"torque_Nm":2925.0,"power_kW":612.6},{"speed_rpm":2166.7,"torque_Nm":2700.0,"power_kW":612.6},{"speed_rpm":2333.3,"torque_Nm":2507.1,"power_kW":612.6},{"speed_rpm":2500.0,"torque_Nm":2340.0,"power_kW":612.6},{"speed_rpm":2666.7,"torque_Nm":2193.8,"power_kW":612.6},{"speed_rpm":2833.3,"torque_Nm":2064.7,"power_kW":612.6},{"speed_rpm":3000.0,"torque_Nm":1950.0,"power_kW":612.6},{"speed_rpm":3166.7,"torque_Nm":1847.4,"power_kW":612.6},{"speed_rpm":3333.3,"torque_Nm":1755.0,"power_kW":612.6},{"speed_rpm":3500.0,"torque_Nm":1671.4,"power_kW":612.6},{"speed_rpm":3666.7,"torque_Nm":1595.5,"power_kW":612.6},{"speed_rpm":3833.3,"torque_Nm":1526.1,"power_kW":612.6},{"speed_rpm":4000.0,"torque_Nm":1462.5,"power_kW":612.6}]},"hatchback_sportscar":{"peak_torque_Nm":2550,"constant_torque_corner_rpm":1200,"peak_power_kW":330,"peak_power_rpm":1250,"speed_range_rpm":[0,2300],"highest_efficiency_region":{"rpm":[500,1500],"torque_Nm":[700,1700],"efficiency_pct_approx":[90,98]},"torque_power_curve":[{"speed_rpm":0.0,"torque_Nm":0.0,"power_kW":0.0},{"speed_rpm":95.8,"torque_Nm":203.6,"power_kW":2.0},{"speed_rpm":191.7,"torque_Nm":407.3,"power_kW":8.2},{"speed_rpm":287.5,"torque_Nm":610.9,"power_kW":18.4},{"speed_rpm":383.3,"torque_Nm":814.6,"power_kW":32.7},{"speed_rpm":479.2,"torque_Nm":1018.2,"power_kW":51.1},{"speed_rpm":575.0,"torque_Nm":1221.9,"power_kW":73.6},{"speed_rpm":670.8,"torque_Nm":1425.5,"power_kW":100.1},{"speed_rpm":766.7,"torque_Nm":1629.2,"power_kW":130.8},{"speed_rpm":862.5,"torque_Nm":1832.8,"power_kW":165.5},{"speed_rpm":958.3,"torque_Nm":2036.5,"power_kW":204.4},{"speed_rpm":1054.2,"torque_Nm":2240.1,"power_kW":247.3},{"speed_rpm":1150.0,"torque_Nm":2443.8,"power_kW":294.3},{"speed_rpm":1245.8,"torque_Nm":2456.2,"power_kW":320.4},{"speed_rpm":1341.7,"torque_Nm":2280.7,"power_kW":320.4},{"speed_rpm":1437.5,"torque_Nm":2128.7,"power_kW":320.4},{"speed_rpm":1533.3,"torque_Nm":1995.7,"power_kW":320.4},{"speed_rpm":1629.2,"torque_Nm":1878.3,"power_kW":320.4},{"speed_rpm":1725.0,"torque_Nm":1773.9,"power_kW":320.4},{"speed_rpm":1820.8,"torque_Nm":1680.5,"power_kW":320.4},{"speed_rpm":1916.7,"torque_Nm":1596.5,"power_kW":320.4},{"speed_rpm":2012.5,"torque_Nm":1520.5,"power_kW":320.4},{"speed_rpm":2108.3,"torque_Nm":1451.4,"power_kW":320.4},{"speed_rpm":2204.2,"torque_Nm":1388.3,"power_kW":320.4},{"speed_rpm":2300.0,"torque_Nm":1330.4,"power_kW":320.4}]}},"sim":{"description":"Synthetic drive-cycle simulation on the supercar/hypercar-class motor, illustrating propulsion, high-efficiency cruise, a Domain ECU-BMC communication fault (per report gap G7 / proposal S10), degraded-mode limp-home (per proposal S2), and regenerative braking.","disclaimer":"Efficiency values are a coarse estimate against the case study's stated high-efficiency region, not read from the original contour map.","timeline":[{"t_s":0.0,"phase":"launch","mode":"propulsion","motor_speed_rpm":0.0,"torque_Nm":3000.0,"power_kW":0.0,"efficiency_pct_estimate":88.9},{"t_s":1.0,"phase":"launch","mode":"propulsion","motor_speed_rpm":975.0,"torque_Nm":3000.0,"power_kW":306.3,"efficiency_pct_estimate":91.4},{"t_s":2.0,"phase":"launch","mode":"propulsion","motor_speed_rpm":1950.0,"torque_Nm":3000.0,"power_kW":612.6,"efficiency_pct_estimate":93.8},{"t_s":3.0,"phase":"power_band_accel","mode":"propulsion","motor_speed_rpm":1950.0,"torque_Nm":3000.0,"power_kW":612.6,"efficiency_pct_estimate":93.8},{"t_s":4.0,"phase":"power_band_accel","mode":"propulsion","motor_speed_rpm":2433.3,"torque_Nm":2404.1,"power_kW":612.6,"efficiency_pct_estimate":96.3},{"t_s":5.0,"phase":"power_band_accel","mode":"propulsion","motor_speed_rpm":2916.7,"torque_Nm":2005.7,"power_kW":612.6,"efficiency_pct_estimate":96.4},{"t_s":6.0,"phase":"power_band_accel","mode":"propulsion","motor_speed_rpm":3400.0,"torque_Nm":1720.6,"power_kW":612.6,"efficiency_pct_estimate":96.2},{"t_s":7.0,"phase":"cruise_high_efficiency","mode":"propulsion","motor_speed_rpm":3400.0,"torque_Nm":602.2,"power_kW":214.4,"efficiency_pct_estimate":94.6},{"t_s":8.0,"phase":"cruise_high_efficiency","mode":"propulsion","motor_speed_rpm":3400.0,"torque_Nm":602.2,"power_kW":214.4,"efficiency_pct_estimate":94.6},{"t_s":9.0,"phase":"cruise_high_efficiency","mode":"propulsion","motor_speed_rpm":3400.0,"torque_Nm":602.2,"power_kW":214.4,"efficiency_pct_estimate":94.6},{"t_s":10.0,"phase":"cruise_high_efficiency","mode":"propulsion","motor_speed_rpm":3400.0,"torque_Nm":602.2,"power_kW":214.4,"efficiency_pct_estimate":94.6},{"t_s":11.0,"phase":"cruise_high_efficiency","mode":"propulsion","motor_speed_rpm":3400.0,"torque_Nm":602.2,"power_kW":214.4,"efficiency_pct_estimate":94.6},{"t_s":12.0,"phase":"cruise_high_efficiency","mode":"propulsion","motor_speed_rpm":3400.0,"torque_Nm":602.2,"power_kW":214.4,"efficiency_pct_estimate":94.6},{"t_s":13.0,"phase":"fault_injection_domain_ecu_comm_loss","mode":"fault","motor_speed_rpm":3400.0,"torque_Nm":602.2,"power_kW":214.4,"efficiency_pct_estimate":94.6,"fault_event":"Domain ECU to BMC CAN-FD link lost (S10 scenario)"},{"t_s":14.0,"phase":"degraded_mode_limp_home","mode":"degraded","motor_speed_rpm":3400.0,"torque_Nm":430.1,"power_kW":153.1,"efficiency_pct_estimate":94.0,"note":"Torque limited per S2 fail-operational degraded-mode definition; BMC-owned HV safe-state unaffected"},{"t_s":15.0,"phase":"degraded_mode_limp_home","mode":"degraded","motor_speed_rpm":2800.0,"torque_Nm":522.3,"power_kW":153.1,"efficiency_pct_estimate":95.8,"note":"Torque limited per S2 fail-operational degraded-mode definition; BMC-owned HV safe-state unaffected"},{"t_s":16.0,"phase":"degraded_mode_limp_home","mode":"degraded","motor_speed_rpm":2200.0,"torque_Nm":664.8,"power_kW":153.2,"efficiency_pct_estimate":97.3,"note":"Torque limited per S2 fail-operational degraded-mode definition; BMC-owned HV safe-state unaffected"},{"t_s":17.0,"phase":"regen_braking","mode":"regen","motor_speed_rpm":2200.0,"torque_Nm":-1595.5,"power_kW":-367.6,"efficiency_pct_estimate":99.1},{"t_s":18.0,"phase":"regen_braking","mode":"regen","motor_speed_rpm":1733.3,"torque_Nm":-1800.0,"power_kW":-326.7,"efficiency_pct_estimate":97.2},{"t_s":19.0,"phase":"regen_braking","mode":"regen","motor_speed_rpm":1266.7,"torque_Nm":-1800.0,"power_kW":-238.8,"efficiency_pct_estimate":96.1},{"t_s":20.0,"phase":"regen_braking","mode":"regen","motor_speed_rpm":800.0,"torque_Nm":-1800.0,"power_kW":-150.8,"efficiency_pct_estimate":94.9},{"t_s":21.0,"phase":"recovery_reconnect","mode":"propulsion","motor_speed_rpm":800.0,"torque_Nm":0.0,"power_kW":0.0,"efficiency_pct_estimate":91.6,"note":"ECU-BMC link restored"}],"ecu_bmc_interface_log":[{"t_s":0.0,"from":"Domain ECU","to":"BMC","message":"power_request","value_kW":640},{"t_s":0.0,"from":"BMC","to":"Domain ECU","message":"power_limit","value_kW":640,"isolation_status":"OK","contactor_state":"CLOSED"},{"t_s":13.0,"from":"Domain ECU","to":"BMC","message":"link_lost","value_kW":null},{"t_s":13.0,"from":"BMC","to":"self","message":"fail_operational_hold_hv_safe_state","contactor_state":"CLOSED","note":"BMC retains authority over contactors/pyro-fuses per S10 proposal"},{"t_s":14.0,"from":"Domain ECU","to":"self","message":"enter_degraded_mode_limp_home","torque_limit_pct":25},{"t_s":18.0,"from":"Domain ECU","to":"BMC","message":"link_restored"},{"t_s":18.0,"from":"BMC","to":"Domain ECU","message":"power_limit","value_kW":640,"isolation_status":"OK","contactor_state":"CLOSED"}]}};
+
+function fmt(n) { return (n === null || n === undefined) ? '—' : n; }
+
+// ---- Section 1: spec cards ----
+const dEcu = DATA.control_units.domain_ecu, xcu = DATA.control_units.xcu;
+document.getElementById('domainRole').textContent = dEcu.role;
+document.getElementById('xcuRole').textContent = xcu.role;
+
+function row(k,v){ return `<div class="spec-row"><span class="k">${k}</span><span class="v">${v}</span></div>`; }
+document.getElementById('domainRows').innerHTML =
+  row('Processor', `${dEcu.processor.total_cores} cores @ ${dEcu.processor.clock_MHz}MHz (${dEcu.processor.core_type})`) +
+  row('Memory', `${dEcu.memory.sdram_GB}GB SDRAM / ${dEcu.memory.nor_flash_MB}MB flash`) +
+  row('I/O', `${dEcu.io.digital_diff_current_inputs}+ inputs, ${dEcu.io.digital_outputs} digital out, ${dEcu.io.dpo} DPO`) +
+  row('Comm', `${dEcu.comm.can_fd}× CAN-FD, ${dEcu.comm.lin}× LIN, ${dEcu.comm.ethernet_100base_t1}× 100BASE-T1`) +
+  row('Safety', `${dEcu.safety.iso26262}, LV124, ECE R10`) +
+  row('Enclosure', `${dEcu.enclosure.ip_rating}, up to ${dEcu.enclosure.max_pins} pins`);
+
+document.getElementById('xcuRows').innerHTML =
+  row('Processor', `2× ${xcu.processor.core_type} @ ${xcu.processor.clock_MHz}MHz`) +
+  row('Memory', `${xcu.memory.ram_KB}KB RAM / ${xcu.memory.flash_KB}KB flash`) +
+  row('I/O', `${xcu.io.digital_diff_current_inputs}+ inputs, ${xcu.io.digital_outputs} digital out`) +
+  row('Comm', `${xcu.comm.can_hs}× CAN-HS, ${xcu.comm.flexray}× FlexRay, ${xcu.comm.broad_r_reach}× BroadR-Reach`) +
+  row('Safety', `${xcu.safety.iso26262}, LV124, ECE R10`) +
+  row('Enclosure', `up to ${xcu.enclosure.max_pins} pins`);
+
+const bms = DATA.bms;
+document.getElementById('bmsRow').innerHTML = `
+  <div class="bms-card"><h4>Battery Management Controller</h4><ul>
+    <li>${bms.bmc.processor.arch}, up to ${bms.bmc.processor.lockstep_cores_max} lock-step cores</li>
+    <li>Up to ${bms.bmc.memory.nvm_MB_max}MB NVM / ${bms.bmc.memory.ram_MB_max}MB RAM</li>
+    <li>${bms.bmc.comm.can_fd}× CAN-FD, ${bms.bmc.comm.isospi}× isoSPI</li>
+  </ul></div>
+  <div class="bms-card"><h4>Cell Module Controller</h4><ul>
+    <li>${bms.cmc.processor}</li>
+    <li>Fully controlled by BMC</li>
+    <li>Optional wireless comm</li>
+  </ul></div>
+  <div class="bms-card"><h4>Shunt Sensor</h4><ul>
+    <li>Isolation resistance measurement</li>
+    <li>Current and voltage measurement</li>
+    <li>isoSPI to BMC</li>
+  </ul></div>`;
+
+// ---- Section 2: motor curves ----
+const motors = DATA.motors;
+const motorKeys = Object.keys(motors);
+let activeMotor = motorKeys[0];
+const toggleEl = document.getElementById('motorToggle');
+motorKeys.forEach(k => {
+  const b = document.createElement('button');
+  b.textContent = k.replace(/_/g,' ');
+  b.dataset.key = k;
+  b.className = k === activeMotor ? 'active' : '';
+  b.onclick = () => { activeMotor = k; renderChart(); [...toggleEl.children].forEach(c=>c.classList.toggle('active', c.dataset.key===k)); };
+  toggleEl.appendChild(b);
+});
+
+function renderChart() {
+  const m = motors[activeMotor];
+  const pts = m.torque_power_curve;
+  const W = 640, H = 300, padL = 46, padR = 46, padT = 16, padB = 30;
+  const maxRpm = Math.max(...pts.map(p=>p.speed_rpm));
+  const maxT = Math.max(...pts.map(p=>p.torque_Nm)) * 1.1;
+  const maxP = Math.max(...pts.map(p=>p.power_kW)) * 1.15;
+  const x = r => padL + (r/maxRpm) * (W-padL-padR);
+  const yT = t => H-padB - (t/maxT) * (H-padT-padB);
+  const yP = p => H-padB - (p/maxP) * (H-padT-padB);
+  const lineT = pts.map((p,i)=> (i===0?'M':'L') + x(p.speed_rpm).toFixed(1) + ',' + yT(p.torque_Nm).toFixed(1)).join(' ');
+  const lineP = pts.map((p,i)=> (i===0?'M':'L') + x(p.speed_rpm).toFixed(1) + ',' + yP(p.power_kW).toFixed(1)).join(' ');
+  let gridLines = '';
+  for (let i=0;i<=4;i++){
+    const gy = padT + i*(H-padT-padB)/4;
+    gridLines += `<line x1="${padL}" y1="${gy}" x2="${W-padR}" y2="${gy}" stroke="var(--line)" stroke-width="1"/>`;
+  }
+  const svg = document.getElementById('curveChart');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = `
+    ${gridLines}
+    <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${H-padB}" stroke="var(--muted2)" stroke-width="1"/>
+    <line x1="${padL}" y1="${H-padB}" x2="${W-padR}" y2="${H-padB}" stroke="var(--muted2)" stroke-width="1"/>
+    <path d="${lineT}" fill="none" stroke="var(--cyan)" stroke-width="2"/>
+    <path d="${lineP}" fill="none" stroke="var(--amber)" stroke-width="2"/>
+    <text x="${padL}" y="${H-8}" fill="var(--muted2)" font-size="10" font-family="var(--mono)">0 rpm</text>
+    <text x="${W-padR}" y="${H-8}" fill="var(--muted2)" font-size="10" font-family="var(--mono)" text-anchor="end">${maxRpm} rpm</text>
+    <text x="${padL-8}" y="${padT+8}" fill="var(--cyan)" font-size="10" font-family="var(--mono)" text-anchor="end">${Math.round(maxT)}</text>
+    <text x="${W-padR+8}" y="${padT+8}" fill="var(--amber)" font-size="10" font-family="var(--mono)">${Math.round(maxP)}kW</text>
+  `;
+  document.getElementById('motorMeta').innerHTML = `
+    <div>PEAK TORQUE <b>${m.peak_torque_Nm} Nm</b></div>
+    <div>PEAK POWER <b>${m.peak_power_kW} kW</b> @ ${m.peak_power_rpm} rpm</div>
+    <div>CORNER SPEED <b>${m.constant_torque_corner_rpm} rpm</b></div>
+    <div>HIGH-EFFICIENCY BAND <b>${m.highest_efficiency_region.rpm[0]}–${m.highest_efficiency_region.rpm[1]} rpm, ${m.highest_efficiency_region.torque_Nm[0]}–${m.highest_efficiency_region.torque_Nm[1]} Nm</b></div>
+  `;
+}
+renderChart();
+
+// ---- Section 3: drive-cycle timeline ----
+const sim = DATA.sim;
+document.getElementById('simDesc').textContent = sim.description;
+const tl = sim.timeline;
+const totalT = tl[tl.length-1].t_s + 1;
+document.getElementById('tlEndLabel').textContent = 't = ' + totalT + 's';
+const strip = document.getElementById('tlStrip');
+const readout = document.getElementById('tlReadout');
+
+function showReadout(entry) {
+  let noteHtml = '';
+  if (entry.fault_event) noteHtml = `<div class="note">⚠ ${entry.fault_event}</div>`;
+  else if (entry.note) noteHtml = `<div class="note">${entry.note}</div>`;
+  readout.innerHTML = `
+    <div class="field"><div class="k">t</div><div class="v">${entry.t_s}s</div></div>
+    <div class="field"><div class="k">phase</div><div class="v">${entry.phase.replace(/_/g,' ')}</div></div>
+    <div class="field"><div class="k">mode</div><div class="v">${entry.mode}</div></div>
+    <div class="field"><div class="k">speed</div><div class="v">${entry.motor_speed_rpm} rpm</div></div>
+    <div class="field"><div class="k">torque</div><div class="v">${entry.torque_Nm} Nm</div></div>
+    <div class="field"><div class="k">power</div><div class="v">${entry.power_kW} kW</div></div>
+    <div class="field"><div class="k">efficiency (est.)</div><div class="v">${entry.efficiency_pct_estimate}%</div></div>
+    ${noteHtml}
+  `;
+  updateElectrical(entry);
+}
+
+// ---- HV/LV electrical model (simplified single-string illustration) ----
+const HV_NOMINAL_V = 800;
+function drawSchema() {
+  const svg = document.getElementById('elecSvg');
+  svg.innerHTML = `
+    <rect x="14" y="70" width="70" height="60" rx="3" fill="var(--panel-2)" stroke="var(--muted2)"/>
+    <text x="49" y="103" fill="var(--text)" font-size="10" font-family="var(--mono)" text-anchor="middle">PACK</text>
+    <line id="wireA" class="flow" x1="84" y1="100" x2="150" y2="100" stroke="var(--cyan)" stroke-width="2.5"/>
+    <g id="contactorG">
+      <rect x="150" y="82" width="46" height="36" rx="3" fill="var(--panel-2)" stroke="var(--green)"/>
+      <text x="173" y="103" fill="var(--text)" font-size="9" font-family="var(--mono)" text-anchor="middle">CNT</text>
+    </g>
+    <line id="wireB" class="flow" x1="196" y1="100" x2="260" y2="100" stroke="var(--cyan)" stroke-width="2.5"/>
+    <rect x="260" y="30" width="6" height="140" fill="var(--muted2)"/>
+    <line id="wireC" class="flow" x1="266" y1="55" x2="330" y2="55" stroke="var(--cyan)" stroke-width="2"/>
+    <rect x="330" y="37" width="90" height="36" rx="3" fill="var(--panel-2)" stroke="var(--muted2)"/>
+    <text x="375" y="59" fill="var(--text)" font-size="9" font-family="var(--mono)" text-anchor="middle">DOMAIN ECU</text>
+    <line id="wireD" class="flow" x1="266" y1="130" x2="330" y2="130" stroke="var(--cyan)" stroke-width="2"/>
+    <rect x="330" y="112" width="90" height="36" rx="3" fill="var(--panel-2)" stroke="var(--muted2)"/>
+    <text x="375" y="134" fill="var(--text)" font-size="9" font-family="var(--mono)" text-anchor="middle">MOTOR INV.</text>
+    <line id="wireE" class="flow" x1="420" y1="130" x2="460" y2="130" stroke="var(--cyan)" stroke-width="2"/>
+    <rect x="460" y="114" width="60" height="32" rx="3" fill="var(--panel-2)" stroke="var(--muted2)"/>
+    <text x="490" y="134" fill="var(--text)" font-size="8.5" font-family="var(--mono)" text-anchor="middle">SHUNT</text>
+    <line id="isoWire" x1="84" y1="130" x2="84" y2="170" stroke="var(--muted2)" stroke-width="1.5" stroke-dasharray="3 3"/>
+    <text x="84" y="184" fill="var(--muted2)" font-size="8.5" font-family="var(--mono)" text-anchor="middle">ISO MON → CHASSIS</text>
+    <line id="commWire" x1="173" y1="118" x2="173" y2="170" stroke="var(--muted2)" stroke-width="1.5" stroke-dasharray="3 3"/>
+    <text x="173" y="184" fill="var(--muted2)" font-size="8.5" font-family="var(--mono)" text-anchor="middle">ECU ↔ BMC COMMS</text>
+  `;
+}
+drawSchema();
+
+function updateElectrical(entry) {
+  const power_kW = entry.power_kW;
+  const current_A = Math.round((power_kW * 1000 / HV_NOMINAL_V) * 10) / 10;
+  const commLost = (entry.mode === 'fault' || entry.mode === 'degraded');
+  const wires = ['wireA','wireB','wireC','wireD','wireE'];
+  wires.forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.remove('active-discharge','active-regen');
+    if (current_A > 0.5) el.classList.add('active-discharge');
+    else if (current_A < -0.5) el.classList.add('active-regen');
+    el.setAttribute('stroke', current_A < -0.5 ? 'var(--violet)' : 'var(--cyan)');
+  });
+  const commWire = document.getElementById('commWire');
+  commWire.setAttribute('stroke', commLost ? 'var(--red)' : 'var(--muted2)');
+  commWire.setAttribute('stroke-width', commLost ? '2.5' : '1.5');
+
+  const elecReadout = document.getElementById('elecReadout');
+  elecReadout.innerHTML = `
+    <div class="elec-stat"><div class="k">HV bus voltage</div><div class="v">${HV_NOMINAL_V} V</div></div>
+    <div class="elec-stat"><div class="k">Pack current</div><div class="v ${current_A<0?'ok':''}">${current_A > 0 ? '+' : ''}${current_A} A ${current_A<0?'(regen charge)':current_A>0?'(discharge)':''}</div></div>
+    <div class="elec-stat"><div class="k">Contactor (BMC-held)</div><div class="v ok">CLOSED</div></div>
+    <div class="elec-stat"><div class="k">Isolation monitor</div><div class="v ok">OK — no fault modeled</div></div>
+    <div class="elec-stat"><div class="k">ECU ↔ BMC comms</div><div class="v ${commLost?'fault':'ok'}">${commLost ? 'LOST — power path unaffected' : 'OK'}</div></div>
+    <div class="elec-stat"><div class="k">LV 12V rail (BMC channels)</div><div class="v ok">NOMINAL</div></div>
+  `;
+}
+
+tl.forEach((entry, i) => {
+  const seg = document.createElement('div');
+  seg.className = 'tl-seg tl-mode-' + entry.mode;
+  seg.style.flex = '1 1 0';
+  seg.title = entry.phase.replace(/_/g,' ') + ' — t=' + entry.t_s + 's';
+  seg.onclick = () => {
+    [...strip.children].forEach(c=>c.classList.remove('selected'));
+    seg.classList.add('selected');
+    showReadout(entry);
+  };
+  strip.appendChild(seg);
+  if (i === 0) { seg.classList.add('selected'); }
+});
+showReadout(tl[0]);
+
+// ---- Section 4: interface log ----
+const logList = document.getElementById('logList');
+sim.ecu_bmc_interface_log.forEach(m => {
+  const row = document.createElement('div');
+  row.className = 'log-row';
+  let msgHtml = `<span class="tag">${m.message}</span>`;
+  if (m.value_kW !== undefined && m.value_kW !== null) msgHtml += `${m.value_kW} kW`;
+  if (m.contactor_state) msgHtml += ` · contactor ${m.contactor_state}`;
+  if (m.isolation_status) msgHtml += ` · isolation ${m.isolation_status}`;
+  if (m.torque_limit_pct) msgHtml += ` · torque limit ${m.torque_limit_pct}%`;
+  if (m.note) msgHtml += `<div style="color:var(--muted);font-size:11.5px;margin-top:3px;">${m.note}</div>`;
+  row.innerHTML = `
+    <div class="log-t">${m.t_s}s</div>
+    <div class="log-route">${m.from} → ${m.to}</div>
+    <div class="log-msg">${msgHtml}</div>
+  `;
+  logList.appendChild(row);
+});
+</script>
+</body>
+</html>
